@@ -19,7 +19,10 @@ matrixMessage byte "Enter the size of your matrix (square matrix only, maximum s
 confirmSize byte "The size of your matrix is: ",0
 valueEntryText1 byte "Enter value for row ",0
 valueEntryText2 byte " column ",0
-emptySpace byte ": ",0
+emptySpaceA byte "for matrix A: ",0
+valueEntryText3 byte "Enter value for row ",0
+valueEntryText4 byte " column ",0
+emptySpaceB byte " for matrix B: ",0
 emptyCR byte " ",13,10,0
 
 xPos DWORD 0	;These two values are important for array indexing. xPos refers to the current column in the 2D matrix, yPos refers to the row
@@ -41,6 +44,8 @@ startPath:
 	mov userSelection,al
 	cmp userSelection,4
 	jge errorMSGChoice
+	cmp userSelection,1
+	je matrixMul	;If user selects 1, goto matrix multiplication
 
 
 
@@ -62,7 +67,7 @@ matrixMul:
 	xor eax,eax
 	xor ebx,ebx
 
-initOuter:
+initOuterA:
 	mov eax,matrixSize
 	mov yPos,eax
 	sub yPos,ecx
@@ -70,9 +75,9 @@ initOuter:
 	push ecx
 	mov ecx,matrixSize
 	mov eax,matrixSize
-	jmp initInner
+	jmp initInnerA
 
-initInner: ;Most of this is nonsense to get the text out, but below is the array initialization. 
+initInnerA: ;Most of this is nonsense to get the text out, but below is the array initialization. 
 		   ;Because ASM doesn't have the abstraction of 2D arrays, you must create the appearance of 2D using pointer math
 	
 	mov eax,matrixSize
@@ -89,7 +94,7 @@ initInner: ;Most of this is nonsense to get the text out, but below is the array
 	call WriteString
 	mov eax,xPos
 	call WriteDec
-	mov edx,OFFSET emptySpace
+	mov edx,OFFSET emptySpaceA
 	call WriteString
 	add eax,yPos
 	mov ebx,4
@@ -99,14 +104,59 @@ initInner: ;Most of this is nonsense to get the text out, but below is the array
 	mov [matrixA + ebx],eax
 
 
-	loop initInner
+	loop initInnerA
 
 	pop ecx
 	cmp ecx,0
-	jg initOuter ;Loop continues if ecx in stack still had number > 0
+	jg initOuterA ;Loop continues if ecx in stack still had number > 0
 
 
+	mov ecx,matrixSize
+	xor eax,eax
+	xor ebx,ebx
 
+initOuterB:
+	mov eax,matrixSize
+	mov yPos,eax
+	sub yPos,ecx
+	sub ecx,1
+	push ecx
+	mov ecx,matrixSize
+	mov eax,matrixSize
+	jmp initInnerB
+
+initInnerB: ;Most of this is nonsense to get the text out, but below is the array initialization. 
+		   ;Because ASM doesn't have the abstraction of 2D arrays, you must create the appearance of 2D using pointer math
+	
+	mov eax,matrixSize
+	mov xPos,eax
+	sub xPos,ecx
+	mov eax,xPos
+	mov ebx,matrixSize
+	mul ebx
+	mov edx,OFFSET valueEntryText3
+	call WriteString
+	mov eax,yPos
+	call WriteDec
+	mov edx,OFFSET valueEntryText4
+	call WriteString
+	mov eax,xPos
+	call WriteDec
+	mov edx,OFFSET emptySpaceB
+	call WriteString
+	add eax,yPos
+	mov ebx,4
+	mul ebx
+	mov ebx,eax
+	call ReadDec
+	mov [matrixA + ebx],eax
+
+
+	loop initInnerB
+
+	pop ecx
+	cmp ecx,0
+	jg initOuterB ;Loop continues if ecx in stack still had number > 0
 
 
 	exit

@@ -22,7 +22,7 @@ valueEntryText2 byte " column ",0
 emptySpace byte ": ",0
 emptyCR byte " ",13,10,0
 
-xPos DWORD 0
+xPos DWORD 0	;These two values are important for array indexing. xPos refers to the current column in the 2D matrix, yPos refers to the row
 yPos DWORD 0
 
 matrixA DWORD 100 DUP(0)

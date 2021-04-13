@@ -27,6 +27,8 @@ displaySeparator byte " ",0
 jPos DWORD 0	;These two values are important for array indexing. jPos refers to the current column in the 2D matrix, iPos refers to the row
 iPos DWORD 0
 tempValPos DWORD 0	;Need a temp variable to store for indexing
+tempMulResult DWORD 0
+tempCResult DWORD 0
 
 matrixA DWORD 100 DUP(0)
 matrixB DWORD 100 DUP(0)
@@ -291,6 +293,145 @@ displayMatrixBInner:
 
 	mov edx,OFFSET emptyCR
 	call WriteString
+
+
+;***********BEGIN MULT OPERATION HERE********************
+
+multPre:
+	mov ecx,matrixSize
+	xor eax,eax
+	xor ebx,ebx
+
+multOuter:	;for(i = 0; i < matrix.length; i++)
+	mov eax,matrixSize
+	mov iVal,eax
+	sub iVal,ecx
+	dec ecx
+	push ecx	;Stack has OUTER LOOP COUNTER ONLY
+	mov ecx,matrixSize
+	jmp multMiddle
+
+multMiddle:	;for(j = 0; j < matrix.length; j++)
+	mov eax,matrixSize
+	mov jVal,eax
+	sub jVal,ecx
+	dec ecx
+	push ecx	;TOP OF STACK MIDDLE LOOP -> OUTER LOOP VALUES
+	mov ecx,matrixSize
+	mov eax,jVal
+	mov ebx,4
+	mul ebx
+	mov tempCResult,eax
+	mov eax,iVal
+	mov ebx,4
+	mul ebx
+	mov ebx,matrixSize
+	mul ebx
+	add tempCResult,eax
+	mov ebx,tempCResult
+	jmp multInner
+
+multInner:	;for(k = 0; k < matrix.length; k++)
+	mov esi,OFFSET matrixC
+	push esi	;TOP OF STACK MATRIX C ADDRESS -> MIDDLE LOOP -> OUTER LOOP
+	mov eax,matrixSize
+	sub eax,ecx
+	mov kVal,eax
+	mov ebx,4
+	mul ebx
+	mov tempValPos,eax
+	mov eax,iVal
+	mov ebx,4
+	mul ebx
+	mov ebx,matrixSize
+	mul ebx
+	add tempValPos,eax
+	mov ebx,tempValPos
+	mov esi,OFFSET matrixA
+	mov eax,[esi+ebx]
+	mov tempMulResult,eax	;Have element A[i][k] stored
+
+	mov eax,jVal
+	mov ebx,4
+	mul ebx
+	mov tempValPos,eax
+	mov eax,kVal
+	mov ebx,4
+	mul ebx
+	mov ebx,matrixSize
+	mul ebx
+	add tempValPos,eax
+	mov ebx,tempValPos
+	mov esi,OFFSET matrixB
+	mov eax,[esi+ebx]
+	mov ebx,tempMulResult
+	mul ebx
+	pop esi	;TOP OF STACK MIDDLE LOOP -> OUTER LOOP VALUES
+	mov ebx,tempCResult
+	add [esi+ebx],eax
+
+	dec ecx
+	jnz multInner
+
+	pop ecx	;Stack has OUTER LOOP COUNTER ONLY
+	cmp ecx,0
+	jg multMiddle	;Loop continues if ecx in stack still had number > 0 goto middle loop
+
+	pop ecx	;STACK EMPTY
+	cmp ecx,0
+	jg multOuter	;Loop continues if ecx in stack still had number > 0 goto outer loop
+
+
+
+;*********************DISPLAY MATRIX C HERE****************************
+
+displayMatrixCPre:
+	mov ecx,matrixSize
+	xor eax,eax
+	xor ebx,ebx
+
+displayMatrixCOuter:
+	mov eax,matrixSize
+	mov iPos,eax
+	sub iPos,ecx	;As loop counter decreases, iPos remains constant, therefore iPos represents the current row.
+	sub ecx,1
+	push ecx
+	mov ecx,matrixSize	;Init inner loop size
+	mov edx,OFFSET emptyCR
+	call WriteString
+	jmp displayMatrixCInner
+
+displayMatrixCInner:
+
+	mov eax,matrixSize
+	sub eax,ecx
+	mov ebx,4
+	mul ebx
+	mov tempValPos,eax
+	mov eax,iPos	;**Because iPos represents the row, it needs to be multiplied by the matrixSize* TYPE matrixA to reference the correct row memory address**
+	mov ebx,matrixSize
+	mul ebx
+	mov ebx,4
+	mul ebx
+	add tempValPos,eax
+	mov ebx,tempValPos
+	mov esi,OFFSET matrixC
+	mov eax,[esi+ebx]
+	call WriteDec
+	mov edx,OFFSET displaySeparator
+	call WriteString
+
+	loop displayMatrixCInner
+
+	pop ecx
+	cmp ecx,0
+	jg displayMatrixCOuter ;Loop continues if ecx in stack still had number > 0
+
+	mov edx,OFFSET emptyCR
+	call WriteString
+
+
+
 
 	exit
 

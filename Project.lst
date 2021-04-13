@@ -1,4 +1,4 @@
-Microsoft (R) Macro Assembler Version 14.28.29913.0	    04/01/21 14:11:29
+Microsoft (R) Macro Assembler Version 14.28.29913.0	    04/13/21 14:49:48
 Matrix Mathe						     Page 1 - 1
 
 
@@ -100,31 +100,30 @@ project.asm(8) : warning A4011:multiple .MODEL directives found : .MODEL ignored
  0000012D 66 6F 72 20 6D	emptySpaceA byte "for matrix A: ",0
 	   61 74 72 69 78
 	   20 41 3A 20 00
- 0000013C 45 6E 74 65 72	valueEntryText3 byte "Enter value for row ",0
-	   20 76 61 6C 75
-	   65 20 66 6F 72
-	   20 72 6F 77 20
-	   00
- 00000151 20 63 6F 6C 75	valueEntryText4 byte " column ",0
-	   6D 6E 20 00
- 0000015A 20 66 6F 72 20	emptySpaceB byte " for matrix B: ",0
+ 0000013C 20 66 6F 72 20	emptySpaceB byte " for matrix B: ",0
 	   6D 61 74 72 69
 	   78 20 42 3A 20
 	   00
- 0000016A 20 0D 0A 00		emptyCR byte " ",13,10,0
+ 0000014C 20 0D 0A 00		emptyCR byte " ",13,10,0
+ 00000150 20 00			displaySeparator byte " ",0
 
- 0000016E 00000000		xPos DWORD 0	;These two values are important for array indexing. xPos refers to the current column in the 2D matrix, yPos refers to the row
- 00000172 00000000		yPos DWORD 0
+ 00000152 00000000		jPos DWORD 0	;These two values are important for array indexing. jPos refers to the current column in the 2D matrix, iPos refers to the row
+ 00000156 00000000		iPos DWORD 0
+ 0000015A 00000000		tempValPos DWORD 0	;Need a temp variable to store for indexing
 
- 00000176  00000064 [		matrixA DWORD 100 DUP(0)
+ 0000015E  00000064 [		matrixA DWORD 100 DUP(0)
 	    00000000
 	   ]
- 00000306  00000064 [		matrixB DWORD 100 DUP(0)
+ 000002EE  00000064 [		matrixB DWORD 100 DUP(0)
 	    00000000
 	   ]
- 00000496  00000064 [		matrixC DWORD 100 DUP(0)
+ 0000047E  00000064 [		matrixC DWORD 100 DUP(0)
 	    00000000
 	   ]
+
+ 0000060E FFFFFFFF		iVal DWORD -1	;The i, j, k simplify indexing for operations.
+ 00000612 FFFFFFFF		jVal DWORD -1
+ 00000616 FFFFFFFF		kVal DWORD -1
 
  00000000			.code
 
@@ -138,7 +137,7 @@ project.asm(8) : warning A4011:multiple .MODEL directives found : .MODEL ignored
  0000000F  A2 0000009F R		mov userSelection,al
  00000014  80 3D 0000009F R		cmp userSelection,4
 	   04
- 0000001B  0F 8D 0000018C		jge errorMSGChoice
+ 0000001B  0F 8D 000002E2		jge errorMSGChoice
  00000021  80 3D 0000009F R		cmp userSelection,1
 	   01
  00000028  74 00			je matrixMul	;If user selects 1, goto matrix multiplication
@@ -149,123 +148,253 @@ project.asm(8) : warning A4011:multiple .MODEL directives found : .MODEL ignored
  0000002A  BA 000000A4 R			mov edx,OFFSET matrixMessage	;Start of asking matrix size
  0000002F  E8 00000000 E		call WriteString
  00000034  E8 00000000 E		call ReadInt
- 00000039  BA 0000016A R		mov edx,OFFSET emptyCR
+ 00000039  BA 0000014C R		mov edx,OFFSET emptyCR
  0000003E  E8 00000000 E		call WriteString
  00000043  A3 000000A0 R		mov matrixSize,eax
  00000048  BA 000000F2 R		mov edx,OFFSET confirmSize
  0000004D  E8 00000000 E		call WriteString
  00000052  BA 000000A0 R		mov edx,OFFSET matrixSize
  00000057  E8 00000000 E		call WriteDec
- 0000005C  BA 0000016A R		mov edx,OFFSET emptyCR
+ 0000005C  BA 0000014C R		mov edx,OFFSET emptyCR
  00000061  E8 00000000 E		call WriteString
 
+				;**************INIT MATRIX A HERE*******************
+
+ 00000066			initAPre: ;	Zero registers, move matrixSize to ecx to begin the loop counter.
  00000066  8B 0D 000000A0 R		mov ecx,matrixSize
  0000006C  33 C0			xor eax,eax
  0000006E  33 DB			xor ebx,ebx
 
  00000070			initOuterA:
  00000070  A1 000000A0 R		mov eax,matrixSize
- 00000075  A3 00000172 R		mov yPos,eax
- 0000007A  29 0D 00000172 R		sub yPos,ecx
+ 00000075  A3 00000156 R		mov iPos,eax
+ 0000007A  29 0D 00000156 R		sub iPos,ecx	;As loop counter decreases, iPos remains constant, therefore iPos represents the current row.
  00000080  83 E9 01			sub ecx,1
  00000083  51				push ecx
- 00000084  8B 0D 000000A0 R		mov ecx,matrixSize
- 0000008A  A1 000000A0 R		mov eax,matrixSize
- 0000008F  EB 00			jmp initInnerA
+ 00000084  8B 0D 000000A0 R		mov ecx,matrixSize	;Init inner loop size
+ 0000008A  EB 00			jmp initInnerA
 
- 00000091			initInnerA: ;Most of this is nonsense to get the text out, but below is the array initialization. 
+ 0000008C			initInnerA: ;Most of this is nonsense to get the text out, but below is the array initialization. 
 						   ;Because ASM doesn't have the abstraction of 2D arrays, you must create the appearance of 2D using pointer math
+
+					;**TEXT CRAP HERE BEFORE ACTUAL MEMORY VALUE MANIPULATION**
+ 0000008C  BA 0000010F R		mov edx,OFFSET valueEntryText1
+ 00000091  E8 00000000 E		call WriteString
+ 00000096  A1 00000156 R		mov eax,iPos
+ 0000009B  E8 00000000 E		call WriteDec
+ 000000A0  BA 00000124 R		mov edx,OFFSET valueEntryText2
+ 000000A5  E8 00000000 E		call WriteString
+ 000000AA  A1 000000A0 R		mov eax,matrixSize
+ 000000AF  2B C1			sub eax,ecx
+ 000000B1  E8 00000000 E		call WriteDec	
+ 000000B6  BA 00000150 R		mov edx,OFFSET displaySeparator
+ 000000BB  E8 00000000 E		call WriteString
+ 000000C0  BA 0000012D R		mov edx,OFFSET emptySpaceA
+ 000000C5  E8 00000000 E		call WriteString
+ 000000CA  BA 0000014C R		mov edx,OFFSET emptyCR
+ 000000CF  E8 00000000 E		call WriteString
 					
- 00000091  A1 000000A0 R		mov eax,matrixSize
- 00000096  A3 0000016E R		mov xPos,eax
- 0000009B  29 0D 0000016E R		sub xPos,ecx
- 000000A1  A1 0000016E R		mov eax,xPos
- 000000A6  8B 1D 000000A0 R		mov ebx,matrixSize
- 000000AC  F7 E3			mul ebx
- 000000AE  BA 0000010F R		mov edx,OFFSET valueEntryText1
- 000000B3  E8 00000000 E		call WriteString
- 000000B8  A1 00000172 R		mov eax,yPos
- 000000BD  E8 00000000 E		call WriteDec
- 000000C2  BA 00000124 R		mov edx,OFFSET valueEntryText2
- 000000C7  E8 00000000 E		call WriteString
- 000000CC  A1 0000016E R		mov eax,xPos
- 000000D1  E8 00000000 E		call WriteDec
- 000000D6  BA 0000012D R		mov edx,OFFSET emptySpaceA
- 000000DB  E8 00000000 E		call WriteString
- 000000E0  03 05 00000172 R		add eax,yPos
- 000000E6  BB 00000004			mov ebx,4
- 000000EB  F7 E3			mul ebx
- 000000ED  8B D8			mov ebx,eax
- 000000EF  E8 00000000 E		call ReadDec
- 000000F4  89 83 00000176 R		mov [matrixA + ebx],eax
 
 
- 000000FA  E2 95			loop initInnerA
+ 000000D4  A1 000000A0 R		mov eax,matrixSize
+ 000000D9  2B C1			sub eax,ecx
+ 000000DB  BB 00000004			mov ebx,4
+ 000000E0  F7 E3			mul ebx
+ 000000E2  A3 0000015A R		mov tempValPos,eax
+ 000000E7  A1 00000156 R		mov eax,iPos	;**Because iPos represents the row, it needs to be multiplied by the matrixSize* TYPE matrixA to reference the correct row memory address**
+ 000000EC  8B 1D 000000A0 R		mov ebx,matrixSize
+ 000000F2  F7 E3			mul ebx
+ 000000F4  BB 00000004			mov ebx,4
+ 000000F9  F7 E3			mul ebx
+ 000000FB  01 05 0000015A R		add tempValPos,eax
+ 00000101  8B 1D 0000015A R		mov ebx,tempValPos
+ 00000107  BE 0000015E R		mov esi,OFFSET matrixA
+ 0000010C  E8 00000000 E		call ReadInt
+ 00000111  89 04 1E			mov [esi+ebx],eax
 
- 000000FC  59				pop ecx
- 000000FD  83 F9 00			cmp ecx,0
- 00000100  0F 8F FFFFFF6A		jg initOuterA ;Loop continues if ecx in stack still had number > 0
+ 00000114  49				dec ecx
+ 00000115  0F 85 FFFFFF71		jnz initInnerA
+
+ 0000011B  59				pop ecx
+ 0000011C  83 F9 00			cmp ecx,0
+ 0000011F  0F 8F FFFFFF4B		jg initOuterA ;Loop continues if ecx in stack still had number > 0
 
 
- 00000106  8B 0D 000000A0 R		mov ecx,matrixSize
- 0000010C  33 C0			xor eax,eax
- 0000010E  33 DB			xor ebx,ebx
+					; END INIT OF MATRIX A
 
- 00000110			initOuterB:
- 00000110  A1 000000A0 R		mov eax,matrixSize
- 00000115  A3 00000172 R		mov yPos,eax
- 0000011A  29 0D 00000172 R		sub yPos,ecx
- 00000120  83 E9 01			sub ecx,1
- 00000123  51				push ecx
- 00000124  8B 0D 000000A0 R		mov ecx,matrixSize
- 0000012A  A1 000000A0 R		mov eax,matrixSize
- 0000012F  EB 00			jmp initInnerB
 
- 00000131			initInnerB: ;Most of this is nonsense to get the text out, but below is the array initialization. 
+				;*********************DISPLAY MATRIX A HERE****************************
+
+ 00000125			displayMatrixAPre:
+ 00000125  8B 0D 000000A0 R		mov ecx,matrixSize
+ 0000012B  33 C0			xor eax,eax
+ 0000012D  33 DB			xor ebx,ebx
+
+ 0000012F			displayMatrixAOuter:
+ 0000012F  A1 000000A0 R		mov eax,matrixSize
+ 00000134  A3 00000156 R		mov iPos,eax
+ 00000139  29 0D 00000156 R		sub iPos,ecx	;As loop counter decreases, iPos remains constant, therefore iPos represents the current row.
+ 0000013F  83 E9 01			sub ecx,1
+ 00000142  51				push ecx
+ 00000143  8B 0D 000000A0 R		mov ecx,matrixSize	;Init inner loop size
+ 00000149  BA 0000014C R		mov edx,OFFSET emptyCR
+ 0000014E  E8 00000000 E		call WriteString
+ 00000153  EB 00			jmp displayMatrixAInner
+
+ 00000155			displayMatrixAInner:
+
+ 00000155  A1 000000A0 R		mov eax,matrixSize
+ 0000015A  2B C1			sub eax,ecx
+ 0000015C  BB 00000004			mov ebx,4
+ 00000161  F7 E3			mul ebx
+ 00000163  A3 0000015A R		mov tempValPos,eax
+ 00000168  A1 00000156 R		mov eax,iPos	;**Because iPos represents the row, it needs to be multiplied by the matrixSize* TYPE matrixA to reference the correct row memory address**
+ 0000016D  8B 1D 000000A0 R		mov ebx,matrixSize
+ 00000173  F7 E3			mul ebx
+ 00000175  BB 00000004			mov ebx,4
+ 0000017A  F7 E3			mul ebx
+ 0000017C  01 05 0000015A R		add tempValPos,eax
+ 00000182  8B 1D 0000015A R		mov ebx,tempValPos
+ 00000188  BE 0000015E R		mov esi,OFFSET matrixA
+ 0000018D  8B 04 1E			mov eax,[esi+ebx]
+ 00000190  E8 00000000 E		call WriteDec
+ 00000195  BA 00000150 R		mov edx,OFFSET displaySeparator
+ 0000019A  E8 00000000 E		call WriteString
+
+ 0000019F  E2 B4			loop displayMatrixAInner
+
+ 000001A1  59				pop ecx
+ 000001A2  83 F9 00			cmp ecx,0
+ 000001A5  7F 88			jg displayMatrixAOuter ;Loop continues if ecx in stack still had number > 0
+
+ 000001A7  BA 0000014C R		mov edx,OFFSET emptyCR
+ 000001AC  E8 00000000 E		call WriteString
+
+
+				;**************INIT MATRIX B HERE*******************
+
+ 000001B1			initBPre: ;	Zero registers, move matrixSize to ecx to begin the loop counter.
+ 000001B1  8B 0D 000000A0 R		mov ecx,matrixSize
+ 000001B7  33 C0			xor eax,eax
+ 000001B9  33 DB			xor ebx,ebx
+
+ 000001BB			initOuterB:
+ 000001BB  A1 000000A0 R		mov eax,matrixSize
+ 000001C0  A3 00000156 R		mov iPos,eax
+ 000001C5  29 0D 00000156 R		sub iPos,ecx	;As loop counter decreases, iPos remains constant, therefore iPos represents the current row.
+ 000001CB  83 E9 01			sub ecx,1
+ 000001CE  51				push ecx
+ 000001CF  8B 0D 000000A0 R		mov ecx,matrixSize	;Init inner loop size
+ 000001D5  EB 00			jmp initInnerB
+
+ 000001D7			initInnerB: ;Most of this is nonsense to get the text out, but below is the array initialization. 
 						   ;Because ASM doesn't have the abstraction of 2D arrays, you must create the appearance of 2D using pointer math
+
+					;**TEXT CRAP HERE BEFORE ACTUAL MEMORY VALUE MANIPULATION**
+ 000001D7  BA 0000010F R		mov edx,OFFSET valueEntryText1
+ 000001DC  E8 00000000 E		call WriteString
+ 000001E1  A1 00000156 R		mov eax,iPos
+ 000001E6  E8 00000000 E		call WriteDec
+ 000001EB  BA 00000124 R		mov edx,OFFSET valueEntryText2
+ 000001F0  E8 00000000 E		call WriteString
+ 000001F5  A1 000000A0 R		mov eax,matrixSize
+ 000001FA  2B C1			sub eax,ecx
+ 000001FC  E8 00000000 E		call WriteDec	
+ 00000201  BA 00000150 R		mov edx,OFFSET displaySeparator
+ 00000206  E8 00000000 E		call WriteString
+ 0000020B  BA 0000013C R		mov edx,OFFSET emptySpaceB
+ 00000210  E8 00000000 E		call WriteString
+ 00000215  BA 0000014C R		mov edx,OFFSET emptyCR
+ 0000021A  E8 00000000 E		call WriteString
 					
- 00000131  A1 000000A0 R		mov eax,matrixSize
- 00000136  A3 0000016E R		mov xPos,eax
- 0000013B  29 0D 0000016E R		sub xPos,ecx
- 00000141  A1 0000016E R		mov eax,xPos
- 00000146  8B 1D 000000A0 R		mov ebx,matrixSize
- 0000014C  F7 E3			mul ebx
- 0000014E  BA 0000013C R		mov edx,OFFSET valueEntryText3
- 00000153  E8 00000000 E		call WriteString
- 00000158  A1 00000172 R		mov eax,yPos
- 0000015D  E8 00000000 E		call WriteDec
- 00000162  BA 00000151 R		mov edx,OFFSET valueEntryText4
- 00000167  E8 00000000 E		call WriteString
- 0000016C  A1 0000016E R		mov eax,xPos
- 00000171  E8 00000000 E		call WriteDec
- 00000176  BA 0000015A R		mov edx,OFFSET emptySpaceB
- 0000017B  E8 00000000 E		call WriteString
- 00000180  03 05 00000172 R		add eax,yPos
- 00000186  BB 00000004			mov ebx,4
- 0000018B  F7 E3			mul ebx
- 0000018D  8B D8			mov ebx,eax
- 0000018F  E8 00000000 E		call ReadDec
- 00000194  89 83 00000176 R		mov [matrixA + ebx],eax
 
 
- 0000019A  E2 95			loop initInnerB
+ 0000021F  A1 000000A0 R		mov eax,matrixSize
+ 00000224  2B C1			sub eax,ecx
+ 00000226  BB 00000004			mov ebx,4
+ 0000022B  F7 E3			mul ebx
+ 0000022D  A3 0000015A R		mov tempValPos,eax
+ 00000232  A1 00000156 R		mov eax,iPos	;**Because iPos represents the row, it needs to be multiplied by the matrixSize* TYPE matrixA to reference the correct row memory address**
+ 00000237  8B 1D 000000A0 R		mov ebx,matrixSize
+ 0000023D  F7 E3			mul ebx
+ 0000023F  BB 00000004			mov ebx,4
+ 00000244  F7 E3			mul ebx
+ 00000246  01 05 0000015A R		add tempValPos,eax
+ 0000024C  8B 1D 0000015A R		mov ebx,tempValPos
+ 00000252  BE 000002EE R		mov esi,OFFSET matrixB
+ 00000257  E8 00000000 E		call ReadInt
+ 0000025C  89 04 1E			mov [esi+ebx],eax
 
- 0000019C  59				pop ecx
- 0000019D  83 F9 00			cmp ecx,0
- 000001A0  0F 8F FFFFFF6A		jg initOuterB ;Loop continues if ecx in stack still had number > 0
+ 0000025F  49				dec ecx
+ 00000260  0F 85 FFFFFF71		jnz initInnerB
 
+ 00000266  59				pop ecx
+ 00000267  83 F9 00			cmp ecx,0
+ 0000026A  0F 8F FFFFFF4B		jg initOuterB ;Loop continues if ecx in stack still had number > 0
+
+
+					; END INIT OF MATRIX B
+
+
+				;*********************DISPLAY MATRIX B HERE****************************
+
+ 00000270			displayMatrixBPre:
+ 00000270  8B 0D 000000A0 R		mov ecx,matrixSize
+ 00000276  33 C0			xor eax,eax
+ 00000278  33 DB			xor ebx,ebx
+
+ 0000027A			displayMatrixBOuter:
+ 0000027A  A1 000000A0 R		mov eax,matrixSize
+ 0000027F  A3 00000156 R		mov iPos,eax
+ 00000284  29 0D 00000156 R		sub iPos,ecx	;As loop counter decreases, iPos remains constant, therefore iPos represents the current row.
+ 0000028A  83 E9 01			sub ecx,1
+ 0000028D  51				push ecx
+ 0000028E  8B 0D 000000A0 R		mov ecx,matrixSize	;Init inner loop size
+ 00000294  BA 0000014C R		mov edx,OFFSET emptyCR
+ 00000299  E8 00000000 E		call WriteString
+ 0000029E  EB 00			jmp displayMatrixBInner
+
+ 000002A0			displayMatrixBInner:
+
+ 000002A0  A1 000000A0 R		mov eax,matrixSize
+ 000002A5  2B C1			sub eax,ecx
+ 000002A7  BB 00000004			mov ebx,4
+ 000002AC  F7 E3			mul ebx
+ 000002AE  A3 0000015A R		mov tempValPos,eax
+ 000002B3  A1 00000156 R		mov eax,iPos	;**Because iPos represents the row, it needs to be multiplied by the matrixSize* TYPE matrixA to reference the correct row memory address**
+ 000002B8  8B 1D 000000A0 R		mov ebx,matrixSize
+ 000002BE  F7 E3			mul ebx
+ 000002C0  BB 00000004			mov ebx,4
+ 000002C5  F7 E3			mul ebx
+ 000002C7  01 05 0000015A R		add tempValPos,eax
+ 000002CD  8B 1D 0000015A R		mov ebx,tempValPos
+ 000002D3  BE 000002EE R		mov esi,OFFSET matrixB
+ 000002D8  8B 04 1E			mov eax,[esi+ebx]
+ 000002DB  E8 00000000 E		call WriteDec
+ 000002E0  BA 00000150 R		mov edx,OFFSET displaySeparator
+ 000002E5  E8 00000000 E		call WriteString
+
+ 000002EA  E2 B4			loop displayMatrixBInner
+
+ 000002EC  59				pop ecx
+ 000002ED  83 F9 00			cmp ecx,0
+ 000002F0  7F 88			jg displayMatrixBOuter ;Loop continues if ecx in stack still had number > 0
+
+ 000002F2  BA 0000014C R		mov edx,OFFSET emptyCR
+ 000002F7  E8 00000000 E		call WriteString
 
 					exit
- 000001A6  6A 00	   *	    push   +000000000h
- 000001A8  E8 00000000 E   *	    call   ExitProcess
+ 000002FC  6A 00	   *	    push   +000000000h
+ 000002FE  E8 00000000 E   *	    call   ExitProcess
 
- 000001AD			errorMSGChoice:
- 000001AD  BA 00000070 R		mov edx,OFFSET errorChoice
- 000001B2  E8 00000000 E		call WriteString
- 000001B7  E9 FFFFFE44			jmp startPath
- 000001BC			main ENDP
+ 00000303			errorMSGChoice:
+ 00000303  BA 00000070 R		mov edx,OFFSET errorChoice
+ 00000308  E8 00000000 E		call WriteString
+ 0000030D  E9 FFFFFCEE			jmp startPath
+
+ 00000312			main ENDP
 				END main
-Microsoft (R) Macro Assembler Version 14.28.29913.0	    04/01/21 14:11:29
+Microsoft (R) Macro Assembler Version 14.28.29913.0	    04/13/21 14:49:48
 Matrix Mathe						     Symbols 2 - 1
 
 
@@ -359,8 +488,8 @@ Segments and Groups:
 
 FLAT . . . . . . . . . . . . . .	GROUP
 STACK  . . . . . . . . . . . . .	32 Bit	 00001000 Para	  Stack	  'STACK'	 
-_DATA  . . . . . . . . . . . . .	32 Bit	 00000626 Para	  Public  'DATA'	
-_TEXT  . . . . . . . . . . . . .	32 Bit	 000001BC Para	  Public  'CODE'	
+_DATA  . . . . . . . . . . . . .	32 Bit	 0000061A Para	  Public  'DATA'	
+_TEXT  . . . . . . . . . . . . .	32 Bit	 00000312 Para	  Public  'CODE'	
 
 
 Procedures, parameters, and locals:
@@ -467,14 +596,22 @@ WriteStackFrame  . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External
 WriteString  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 WriteToFile  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
 WriteWindowsMsg  . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
-main . . . . . . . . . . . . . .	P Near	 00000000 _TEXT	Length= 000001BC Public STDCALL
+main . . . . . . . . . . . . . .	P Near	 00000000 _TEXT	Length= 00000312 Public STDCALL
   startPath  . . . . . . . . . .	L Near	 00000000 _TEXT	
   matrixMul  . . . . . . . . . .	L Near	 0000002A _TEXT	
+  initAPre . . . . . . . . . . .	L Near	 00000066 _TEXT	
   initOuterA . . . . . . . . . .	L Near	 00000070 _TEXT	
-  initInnerA . . . . . . . . . .	L Near	 00000091 _TEXT	
-  initOuterB . . . . . . . . . .	L Near	 00000110 _TEXT	
-  initInnerB . . . . . . . . . .	L Near	 00000131 _TEXT	
-  errorMSGChoice . . . . . . . .	L Near	 000001AD _TEXT	
+  initInnerA . . . . . . . . . .	L Near	 0000008C _TEXT	
+  displayMatrixAPre  . . . . . .	L Near	 00000125 _TEXT	
+  displayMatrixAOuter  . . . . .	L Near	 0000012F _TEXT	
+  displayMatrixAInner  . . . . .	L Near	 00000155 _TEXT	
+  initBPre . . . . . . . . . . .	L Near	 000001B1 _TEXT	
+  initOuterB . . . . . . . . . .	L Near	 000001BB _TEXT	
+  initInnerB . . . . . . . . . .	L Near	 000001D7 _TEXT	
+  displayMatrixBPre  . . . . . .	L Near	 00000270 _TEXT	
+  displayMatrixBOuter  . . . . .	L Near	 0000027A _TEXT	
+  displayMatrixBInner  . . . . .	L Near	 000002A0 _TEXT	
+  errorMSGChoice . . . . . . . .	L Near	 00000303 _TEXT	
 printf . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External C
 scanf  . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External C
 wsprintfA  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External C
@@ -698,13 +835,19 @@ blue . . . . . . . . . . . . . .	Number	 00000001h
 brown  . . . . . . . . . . . . .	Number	 00000006h   
 confirmSize  . . . . . . . . . .	Byte	 000000F2 _DATA	
 cyan . . . . . . . . . . . . . .	Number	 00000003h   
-emptyCR  . . . . . . . . . . . .	Byte	 0000016A _DATA	
+displaySeparator . . . . . . . .	Byte	 00000150 _DATA	
+emptyCR  . . . . . . . . . . . .	Byte	 0000014C _DATA	
 emptySpaceA  . . . . . . . . . .	Byte	 0000012D _DATA	
-emptySpaceB  . . . . . . . . . .	Byte	 0000015A _DATA	
+emptySpaceB  . . . . . . . . . .	Byte	 0000013C _DATA	
 errorChoice  . . . . . . . . . .	Byte	 00000070 _DATA	
 exit . . . . . . . . . . . . . .	Text   	 INVOKE ExitProcess,0
 gray . . . . . . . . . . . . . .	Number	 00000008h   
 green  . . . . . . . . . . . . .	Number	 00000002h   
+iPos . . . . . . . . . . . . . .	DWord	 00000156 _DATA	
+iVal . . . . . . . . . . . . . .	DWord	 0000060E _DATA	
+jPos . . . . . . . . . . . . . .	DWord	 00000152 _DATA	
+jVal . . . . . . . . . . . . . .	DWord	 00000612 _DATA	
+kVal . . . . . . . . . . . . . .	DWord	 00000616 _DATA	
 lightBlue  . . . . . . . . . . .	Number	 00000009h   
 lightCyan  . . . . . . . . . . .	Number	 0000000Bh   
 lightGray  . . . . . . . . . . .	Number	 00000007h   
@@ -712,22 +855,19 @@ lightGreen . . . . . . . . . . .	Number	 0000000Ah
 lightMagenta . . . . . . . . . .	Number	 0000000Dh   
 lightRed . . . . . . . . . . . .	Number	 0000000Ch   
 magenta  . . . . . . . . . . . .	Number	 00000005h   
-matrixA  . . . . . . . . . . . .	DWord	 00000176 _DATA	
-matrixB  . . . . . . . . . . . .	DWord	 00000306 _DATA	
-matrixC  . . . . . . . . . . . .	DWord	 00000496 _DATA	
+matrixA  . . . . . . . . . . . .	DWord	 0000015E _DATA	
+matrixB  . . . . . . . . . . . .	DWord	 000002EE _DATA	
+matrixC  . . . . . . . . . . . .	DWord	 0000047E _DATA	
 matrixMessage  . . . . . . . . .	Byte	 000000A4 _DATA	
 matrixSize . . . . . . . . . . .	DWord	 000000A0 _DATA	
 red  . . . . . . . . . . . . . .	Number	 00000004h   
+tempValPos . . . . . . . . . . .	DWord	 0000015A _DATA	
 userChoice . . . . . . . . . . .	Byte	 00000000 _DATA	
 userSelection  . . . . . . . . .	Byte	 0000009F _DATA	
 valueEntryText1  . . . . . . . .	Byte	 0000010F _DATA	
 valueEntryText2  . . . . . . . .	Byte	 00000124 _DATA	
-valueEntryText3  . . . . . . . .	Byte	 0000013C _DATA	
-valueEntryText4  . . . . . . . .	Byte	 00000151 _DATA	
 white  . . . . . . . . . . . . .	Number	 0000000Fh   
 wsprintf . . . . . . . . . . . .	Text   	 wsprintfA
-xPos . . . . . . . . . . . . . .	DWord	 0000016E _DATA	
-yPos . . . . . . . . . . . . . .	DWord	 00000172 _DATA	
 yellow . . . . . . . . . . . . .	Number	 0000000Eh   
 
 	   1 Warnings

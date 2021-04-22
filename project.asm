@@ -11,7 +11,7 @@ ExitProcess proto,dwExitCode:dword
 
 .data
 
-userChoice byte "Select Operation -- (1) for Matrix Multiplication, (2) To find Matrix Determinant, (3) To find Matrix Inverse",13,10,0
+userChoice byte "Select Operation -- (1) for Matrix Multiplication, (2) To find Matrix Inverse, (3) To find Matrix Determinant",13,10,0
 errorChoice byte "Error, selection out of range. Choose again.",13,10,0
 userSelection byte ?
 matrixSize DWORD ?
@@ -26,13 +26,21 @@ displaySeparator byte " ",0
 
 jPos DWORD 0	;These two values are important for array indexing. jPos refers to the current column in the 2D matrix, iPos refers to the row
 iPos DWORD 0
+kPos DWORD 0
 tempValPos DWORD 0	;Need a temp variable to store for indexing
 tempMulResult DWORD 0
 tempCResult DWORD 0
+factor REAL4 ?
+divisor REAL4 ?
+dividend REAL4 ?
+showNum REAL4 ?
+zero REAL4 0.0
+one REAL4 1.0
 
-matrixA DWORD 100 DUP(0)
-matrixB DWORD 100 DUP(0)
-matrixC DWORD 100 DUP(0)
+matrixA REAL4 100 DUP(?)
+matrixB REAL4 100 DUP(?)
+matrixC REAL4 100 DUP(?)
+identityMatrix REAL4 100 DUP(?)
 
 iVal DWORD -1	;The i, j, k simplify indexing for operations.
 jVal DWORD -1
@@ -42,6 +50,8 @@ kVal DWORD -1
 
 main PROC
 
+	FINIT
+
 startPath:
 ;Decision Pathing for the user
 	mov edx,OFFSET userChoice
@@ -50,8 +60,6 @@ startPath:
 	mov userSelection,al
 	cmp userSelection,4
 	jge errorMSGChoice
-	cmp userSelection,1
-	je matrixMul	;If user selects 1, goto matrix multiplication
 
 
 
@@ -68,6 +76,13 @@ matrixMul:
 	call WriteDec
 	mov edx,OFFSET emptyCR
 	call WriteString
+
+	cmp userSelection,1
+	je matrixMul	;If user selects 1, goto matrix multiplication
+	cmp userSelection,2
+	je matInverse	;If user selects 2, goto matrix inverse because Matrix B is not needed
+	cmp userSelection,3
+	je matInverse ;If user selects 3, goto matrix det because Matrix B is not needed
 
 ;**************INIT MATRIX A HERE*******************
 
@@ -429,10 +444,427 @@ displayMatrixCInner:
 
 	mov edx,OFFSET emptyCR
 	call WriteString
+	jmp SKIP
+
+
+matInverse:
+
+initIDPre:
+	xor eax,eax
+	xor ebx,ebx
+	mov ecx,matrixSize
+	mov iPos,0
+	mov jPos,0
+
+initIDOuter:
+	mov eax,matrixSize
+	dec ecx
+	push ecx
+	mov ecx,matrixSize
+	mov jPos,0
+
+initIDInner:
+	mov tempValPos,0
+	mov eax,iPos
+	mov ebx,jPos
+	inc jPos
+	cmp eax,ebx
+	jne InitIDNE
+	mov ebx,4
+	mul ebx
+	mov ebx,matrixSize
+	mul ebx
+	mov tempValPos,eax
+	mov eax,iPos
+	mov ebx,4
+	mul ebx
+	add tempValPos,eax
+	mov ebx,tempValPos
+	mov esi,OFFSET identityMatrix
+	fld one
+	fstp REAL4 PTR[ebx+esi]
+	jmp InitIDReset
+
+InitIDNE:
+	mov ebx,4
+	mul ebx
+	mov ebx,matrixSize
+	mul ebx
+	mov tempValPos,eax
+	mov eax,jPos
+	mov ebx,4
+	mul ebx
+	add tempValPos,eax
+	mov ebx,tempValPos
+	mov esi,OFFSET identityMatrix
+	fld zero
+	fstp REAL4 PTR[ebx+esi]
+
+	dec ecx
+	jnz initIDInner
+
+	jmp InitIDResetOuter
+
+InitIDReset:
+	dec ecx
+	jnz initIDInner
+
+InitIDResetOuter:
+	
+	inc iPos
+	pop ecx
+	cmp ecx,0
+	jg initIDOuter
+
+	mov edx,OFFSET emptyCR
+	call WriteString
+
+initInversePre:
+	xor eax,eax
+	xor ebx,ebx
+	mov ecx,matrixSize
+
+initInverseOuter:
+	mov eax,matrixSize
+	mov iPos,eax
+	sub iPos,ecx
+	dec ecx
+	push ecx
+	mov ecx,matrixSize
+	mov jPos,0
+
+initInverseInner:
+
+	mov edx,OFFSET valueEntryText1
+	call WriteString
+	mov eax,iPos
+	call WriteDec
+	mov edx,OFFSET valueEntryText2
+	call WriteString
+	mov eax,matrixSize
+	sub eax,ecx
+	call WriteDec	
+	mov edx,OFFSET displaySeparator
+	call WriteString
+	mov edx,OFFSET emptySpaceA
+	call WriteString
+	mov edx,OFFSET emptyCR
+	call WriteString
+
+	mov eax,iPos
+	mov ebx,4
+	mul ebx
+	mov ebx,matrixSize
+	mul ebx
+	mov tempValPos,eax
+	mov eax,jPos
+	mov ebx,4
+	mul ebx
+	add tempValPos,eax
+	mov ebx,tempValPos
+	mov esi,OFFSET matrixA
+	call ReadFloat
+	fstp REAL4 PTR[ebx+esi]
+
+	inc jPos
+	dec ecx
+	jnz initInverseInner
+
+	pop ecx
+	cmp ecx,0
+	jg initInverseOuter
+
+	mov edx,OFFSET emptyCR
+	call WriteString
+
+EliminationPre:
+	mov ecx,matrixSize
+	xor eax,eax
+	xor ebx,ebx
+	mov jPos,0
+	mov iPos,0
+	mov kPos,0
+
+EliminationOuter:
+	
+	dec ecx
+	push ecx
+	mov ecx,matrixSize
+	mov iPos,0
+
+EliminationMiddle:
+	dec ecx
+	push ecx
+	mov tempValPos,0
+	mov eax,jPos
+	mov ebx,iPos
+	cmp eax,ebx
+	je EliminationConditional
+	mov ebx,4
+	mul ebx
+	mov tempValPos,eax
+	mov eax,iPos
+	mul ebx
+	mov ebx,matrixSize
+	mul ebx
+	add eax,tempValPos
+	mov ebx,eax
+	mov esi,OFFSET matrixA
+	fld REAL4 PTR[ebx+esi]	;ST(0): MatrixA[i][j]
+	mov eax,jPos
+	mov ebx,4
+	mul ebx
+	mov tempValPos,eax
+	mov eax,jPos
+	mul ebx
+	mov ebx,matrixSize
+	mul ebx
+	add eax,tempValPos
+	mov ebx,eax
+	mov esi,OFFSET matrixA
+	fld REAL4 PTR[ebx+esi]	;ST(0): MatrixA[j][j] -> ST(1): MatrixA[i][j]
+	fdiv	;ST(0): (short)MatrixA[i][j]/MatrixA[j][j]
+	fstp factor	;FPU empty
+	mov kPos,0
+
+	mov ecx,matrixSize
+
+EliminationInner:
+
+;****MATRIX A PORTION****
+	mov tempValPos,0
+	mov eax,iPos
+	mov ebx,4
+	mul ebx
+	mov ebx,matrixSize
+	mul ebx
+	mov tempValPos,eax
+	mov eax,kPos
+	mov ebx,4
+	mul ebx
+	add tempValPos,eax
+	mov esi,OFFSET matrixA
+	mov ebx,tempValPos
+	fld REAL4 PTR[ebx+esi]	;ST(0): A[i][k]
+	mov eax,jPos
+	mov ebx,4
+	mul ebx
+	mov ebx,matrixSize
+	mul ebx
+	mov tempValPos,eax
+	mov eax,kPos
+	mov ebx,4
+	mul ebx
+	add tempValPos,eax
+	mov ebx,tempValPos
+	fld REAL4 PTR[ebx+esi]	;ST(0): A[j][k] -> ST(1) A[i][k]
+	fld factor	;ST(0) factor -> A[j][k] -> A[i][k]
+	fmul	;ST(0): A[j][k] -> ST(1) A[i][k]
+	fsub	;ST(0): A[i][k]-factor*A[j][k]
+	mov eax,iPos
+	mov ebx,4
+	mul ebx
+	mov ebx,matrixSize
+	mul ebx
+	mov tempValPos,eax
+	mov eax,kPos
+	mov ebx,4
+	mul ebx
+	add tempValPos,eax
+	mov ebx,tempValPos
+	fstp REAL4 PTR[ebx+esi]
+
+;****IDENTITY MATRIX PORTION****
+	mov tempValPos,0
+	mov eax,iPos
+	mov ebx,4
+	mul ebx
+	mov ebx,matrixSize
+	mul ebx
+	mov tempValPos,eax
+	mov eax,kPos
+	mov ebx,4
+	mul ebx
+	add tempValPos,eax
+	mov esi,OFFSET identityMatrix
+	mov ebx,tempValPos
+	fld REAL4 PTR[ebx+esi]	;ST(0): A[i][k]
+	mov eax,jPos
+	mov ebx,4
+	mul ebx
+	mov ebx,matrixSize
+	mul ebx
+	mov tempValPos,eax
+	mov eax,kPos
+	mov ebx,4
+	mul ebx
+	add tempValPos,eax
+	mov ebx,tempValPos
+	fld REAL4 PTR[ebx+esi]	;ST(0): A[j][k] -> ST(1) A[i][k]
+	fld factor	;ST(0) factor -> A[j][k] -> A[i][k]
+	fmul	;ST(0): A[j][k] -> ST(1) A[i][k]
+	fsub	;ST(0): A[i][k]-factor*A[j][k]
+	mov eax,iPos
+	mov ebx,4
+	mul ebx
+	mov ebx,matrixSize
+	mul ebx
+	mov tempValPos,eax
+	mov eax,kPos
+	mov ebx,4
+	mul ebx
+	add tempValPos,eax
+	mov ebx,tempValPos
+	fstp REAL4 PTR[ebx+esi]
+
+	;;SO FAR THIS WORKS, BELOW BEWARE
+
+	inc kPos
+	dec ecx
+	jnz EliminationInner
+
+EliminationConditional:
+	inc iPos
+	pop ecx
+	cmp ecx,0
+	jg EliminationMiddle
+
+	inc jPos
+	pop ecx
+	cmp ecx,0
+	jg EliminationOuter
+
+
+
+finalElimPre:
+	xor eax,eax
+	xor ebx,ebx
+	mov ecx,matrixSize
+	mov iPos,0
+
+finalElimOuter:
+	mov tempValPos,0
+	dec ecx
+	push ecx
+	mov jPos,0
+	mov eax,iPos
+	mov ebx,4
+	mul ebx
+	mov ebx,matrixSize
+	mul ebx
+	mov tempValPos,eax
+	mov eax,iPos
+	mov ebx,4
+	mul ebx
+	add tempValPos,eax
+	mov ebx,tempValPos
+	mov esi,OFFSET matrixA
+	fld REAL4 PTR[esi+ebx]
+	fstp divisor
+	fld divisor	;Going to push this down the stack for determinant calculations
+	mov ecx,matrixSize
+
+finalElimInner:
+	mov tempValPos,0
+	mov eax,iPos
+	mov ebx,4
+	mul ebx
+	mov ebx,matrixSize
+	mul ebx
+	mov tempValPos,eax
+	mov eax,jPos
+	mov ebx,4
+	mul ebx
+	add tempValPos,eax
+	mov ebx,tempValPos
+	mov esi,OFFSET identityMatrix
+	fld REAL4 PTR[esi+ebx]
+	fstp dividend
+	fld dividend
+	fld divisor
+	fdiv
+	fstp REAL4 PTR[esi+ebx]
+
+	inc jPos
+	dec ecx
+	jnz finalElimInner
+
+	inc iPos
+	pop ecx
+	cmp ecx,0
+	jg finalElimOuter
+
+	cmp userSelection,3
+	je matDeterminant
+	
+
+;*********************DISPLAY I HERE****************************
+
+displayMatrixIPre:
+	mov ecx,matrixSize
+	xor eax,eax
+	xor ebx,ebx
+
+displayMatrixIOuter:
+	mov eax,matrixSize
+	mov iPos,eax
+	sub iPos,ecx	;As loop counter decreases, iPos remains constant, therefore iPos represents the current row.
+	sub ecx,1
+	push ecx
+	mov ecx,matrixSize	;Init inner loop size
+	mov edx,OFFSET emptyCR
+	call WriteString
+	jmp displayMatrixIInner
+
+displayMatrixIInner:
+
+	mov eax,matrixSize
+	sub eax,ecx
+	mov ebx,4
+	mul ebx
+	mov tempValPos,eax
+	mov eax,iPos	;**Because iPos represents the row, it needs to be multiplied by the matrixSize* TYPE matrixA to reference the correct row memory address**
+	mov ebx,matrixSize
+	mul ebx
+	mov ebx,4
+	mul ebx
+	add tempValPos,eax
+	mov ebx,tempValPos
+	mov esi,OFFSET identityMatrix
+	fld REAL4 PTR[esi+ebx]
+	call WriteFloat
+	fstp showNum
+	mov edx,OFFSET displaySeparator
+	call WriteString
+
+	loop displayMatrixIInner
+
+	pop ecx
+	cmp ecx,0
+	jg displayMatrixIOuter ;Loop continues if ecx in stack still had number > 0
+
+	mov edx,OFFSET emptyCR
+	call WriteString
+	jmp SKIP
+
+matDeterminant:
+
+	xor eax,eax
+	xor ebx,ebx
+	mov ecx,matrixSize
+	dec ecx
+
+matDetCalc:
+	fmul
+	loop matDetCalc
+
+showDet:
+	call WriteFloat
 
 
 
 
+SKIP:
 	exit
 
 errorMSGChoice:

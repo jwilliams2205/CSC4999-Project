@@ -11,7 +11,7 @@ ExitProcess proto,dwExitCode:dword
 
 .data
 
-userChoice byte "Select Operation -- (1) for Matrix Multiplication, (2) To find Matrix Inverse, (3) To find Matrix Determinant",13,10,0
+userChoice byte "Select Operation -- (1) for Matrix Multiplication, (2) To find Matrix Inverse, (3) To find Matrix Determinant, (4) for Matrix Addition, (5) for Matrix Subtraction",13,10,0
 errorChoice byte "Error, selection out of range. Choose again.",13,10,0
 userSelection byte ?
 matrixSize DWORD ?
@@ -58,7 +58,7 @@ startPath:
 	call WriteString
 	call ReadInt
 	mov userSelection,al
-	cmp userSelection,4
+	cmp userSelection,6
 	jge errorMSGChoice
 
 
@@ -77,12 +77,11 @@ matrixMul:
 	mov edx,OFFSET emptyCR
 	call WriteString
 
-	cmp userSelection,1
-	je matrixMul	;If user selects 1, goto matrix multiplication
 	cmp userSelection,2
 	je matInverse	;If user selects 2, goto matrix inverse because Matrix B is not needed
 	cmp userSelection,3
-	je matInverse ;If user selects 3, goto matrix det because Matrix B is not needed
+	je matInverse
+	;If user selects 3, goto matrix det because Matrix B is not needed
 
 ;**************INIT MATRIX A HERE*******************
 
@@ -308,6 +307,158 @@ displayMatrixBInner:
 
 	mov edx,OFFSET emptyCR
 	call WriteString
+
+	cmp userSelection,1
+	je multPre
+
+	cmp userSelection,5
+	je subPre
+
+;***********BEGIN ADD HERE*******************
+addPre:
+
+	; this calculates the total size of the Matrix memory ((matrixSize*matrixSize)*4)-4 = tempMatrixSize (i.e [matrixSize+60])
+	mov ebx, 4
+	mov eax, matrixSize
+	mul eax
+	mul ebx
+	sub eax, ebx
+	;mov tempMatrixSize, eax
+
+
+	; this zeroes out all the registes and preps for the actual addfunctions
+	mov ecx, matrixSize
+	xor eax,eax
+	xor ebx,ebx
+
+	
+	mov tempValPos, 0
+	mov iPos, 0
+	mov jPos, 0
+
+	
+
+
+addOuter:	;this is kinda setup for the next outer loop iteration	
+	mov jPos, 0
+	
+
+	mov eax, matrixSize					; This moves the matrix size into eax and MULs it by 4 to get its position in memory
+	mov ebx, 4
+	mul ebx
+
+	; MUL resets edx so restore value
+	; this subs 1 from the matrixSize and stores in edx for the outerLoopCounter
+	mov edx, matrixSize
+	sub edx, 1
+
+	;mov ecx, tempMatrixSize				
+	mov ebx, matrixSize					
+	cmp iPos, ebx						
+	jge displayMatrixCPre				; Adding is completed so jmp to matrixC
+	
+
+addInner:	
+	
+	; This is where the adding gets done
+	mov ecx, tempValPos
+	mov eax, [matrixA+ecx]
+	add eax, [matrixB+ecx]
+	mov [matrixC+ecx], eax
+
+	; add BEFORE THIS SECTION
+	mov eax, tempValPos		; this adds 4 to maintain the memory position of the var
+	add eax, 4
+	mov tempValPos, eax
+
+	cmp jPos, edx
+	jge  addInnerDone
+	inc jPos
+	jmp addInner
+
+addInnerDone:
+	inc iPos				
+	mov eax, tempValPos
+	jmp addOuter
+
+
+;***********BEGIN SUB HERE*********************
+
+subPre:
+
+	; this calculates the total size of the Matrix memory ((matrixSize*matrixSize)*4)-4 = tempMatrixSize (i.e [matrixSize+60])
+	mov ebx, 4
+	mov eax, matrixSize
+	mul eax
+	mul ebx
+	sub eax, ebx
+	;mov tempMatrixSize, eax
+
+
+	; this zeroes out all the registes and preps for the actual subfunctions
+	mov ecx, matrixSize
+	xor eax,eax
+	xor ebx,ebx
+
+	
+	mov tempValPos, 0
+	mov iPos, 0
+	mov jPos, 0
+
+	
+
+
+subOuter:	;this is kinda setup for the next outer loop iteration	
+	mov jPos, 0
+	
+
+	mov eax, matrixSize					; This moves the matrix size into eax and MULs it by 4 to get its position in memory
+	mov ebx, 4
+	mul ebx
+
+	; MUL resets edx so restore value
+	; this subs 1 from the matrixSize and stores in edx for the outerLoopCounter
+	mov edx, matrixSize
+	sub edx, 1
+
+	;mov ecx, tempMatrixSize				
+	mov ebx, matrixSize					
+	cmp iPos, ebx						
+	jge displayMatrixCPre				; Subtraction is completed so jmp to matrixC
+	
+
+subInner:	
+	
+	; This is where the SUBTRACTION gets done
+	mov ecx, tempValPos
+	mov eax, [matrixA+ecx]
+	sub eax, [matrixB+ecx]
+
+	js signedSub
+	mov [matrixC+ecx], eax				; sign flag is PL
+	jmp afterSignedSub
+
+signedSub:
+	; IMPLMENT CONVERSION
+	not eax
+	add eax, 1
+	mov [matrixC+ecx], eax				; sign flag is PL
+
+afterSignedSub:
+	; sub BEFORE THIS SECTION
+	mov eax, tempValPos		; this adds 4 to maintain the memory position of the var
+	add eax, 4
+	mov tempValPos, eax
+
+	cmp jPos, edx
+	jge subInnerDone
+	inc jPos
+	jmp subInner
+
+subInnerDone:
+	inc iPos				
+	mov eax, tempValPos
+	jmp subOuter
 
 
 ;***********BEGIN MULT OPERATION HERE********************
